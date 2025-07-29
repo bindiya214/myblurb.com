@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Case Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Your existing CSS styles remain here */
+        .detail-box {
+            border: 1px solid #dee2e6;
+            border-radius: .375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #f8f9fa;
+            position: relative; /* Needed for absolute positioning of button */
+        }
+        .detail-header {
+            display: flex; /* Use flexbox for horizontal alignment */
+            justify-content: space-between; /* Pushes label to left, button to right */
+            align-items: center; /* Vertically centers label and button */
+            margin-bottom: .5rem;
+        }
+        .detail-header label {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 0; /* Remove default margin for label within flex */
+        }
+        .detail-box p {
+            white-space: pre-wrap;
+            margin-bottom: 0; /* Remove bottom margin to prevent extra space */
+        }
+        .copy-button-container {
+            position: relative; /* To position the feedback span relative to it */
+            display: flex; /* To align icon and text within button if needed */
+            align-items: center;
+        }
+        .copy-feedback {
+            position: absolute;
+            top: -1.5rem; /* Position above the button */
+            right: 0;
+            background-color: #d1e7dd;
+            color: #0f5132;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            white-space: nowrap; /* Prevent "Copied!" from wrapping */
+            pointer-events: none; /* Make sure it doesn't block clicks */
+            z-index: 10; /* Ensure it appears above other content */
+        }
+        .copy-feedback.show {
+            opacity: 1;
+        }
+        /* Custom styles for radio buttons to make them look more like buttons/labels */
+        .type-selection-group .form-check-label {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border: 1px solid #007bff;
+            border-radius: 0.25rem;
+            margin-right: 10px;
+            background-color: #eaf6ff;
+            color: #007bff;
+            transition: all 0.2s ease-in-out;
+        }
+        .type-selection-group .form-check-input:checked + .form-check-label {
+            background-color: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+        .type-selection-group .form-check-input {
+            display: none; /* Hide the actual radio button */
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container my-4">
+        <h1 class="mb-4 text-center">Case Management System</h1>
+        <hr>
+
+        <form id="selectionForm" method="POST" action="/">
+            <div class="mb-3">
+                <label class="form-label fw-bold">1. Type:</label>
+                <div class="type-selection-group d-flex flex-wrap">
+                    {% for type_option in types %}
+                        <div class="form-check me-3 mb-2">
+                            <input class="form-check-input" type="radio" name="type_selection" id="type_{{ type_option }}" value="{{ type_option }}" {% if type_option == selected_type %}checked{% endif %} onchange="this.form.submit()">
+                            <label class="form-check-label" for="type_{{ type_option }}">
+                                {{ type_option }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Only show cycleDiv if a type has been selected #}
+            <div class="mb-3" id="cycleDiv" {% if not selected_type %}style="display:none;"{% endif %}>
+                <label for="cycle" class="form-label fw-bold">2. Cycle:</label>
+                <select class="form-select" name="cycle" id="cycle" onchange="this.form.submit()">
+                    <option value="">Choose a Cycle</option>
+                    {% for cycle_name in cycles %}
+                        <option value="{{ cycle_name }}" {% if selected_cycle == cycle_name %}selected{% endif %}>
+                            {{ cycle_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Only show stageDiv if a cycle has been selected #}
+            <div class="mb-3" id="stageDiv" {% if not selected_cycle %}style="display:none;"{% endif %}>
+                <label for="stage_of_issue" class="form-label fw-bold">3. Stage of Issue:</label>
+                <select class="form-select" name="stage_of_issue" id="stage_of_issue" onchange="this.form.submit()">
+                    <option value="">Select Stage...</option>
+                    {% for stage_name in stages_to_display %}
+                        <option value="{{ stage_name }}" {% if selected_stage == stage_name %}selected{% endif %}>
+                            {{ stage_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Only show the submit button if a stage is selected #}
+            <div class="mt-4" id="submitButtonDiv" {% if not selected_stage %}style="display:none;"{% endif %}>
+                <button type="submit" name="generate_details" class="btn btn-success btn-lg">Generate Details</button>
+            </div>
+        </form>
+
+        <hr class="mt-5">
+
+        {% if case_details %}
+            <div class="card mt-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Case Details for: <span id="selectedProblemDisplay">
+                        {{ selected_type }} - {{ selected_cycle }} - {{ selected_stage }} - {{ selected_problem_name_for_display }}
+                    </span></h5>
+                </div>
+                <div class="card-body">
+                    {% if selected_type == "MLF" %}
+                <!-- MLF shows all fields -->
+                <div class="detail-box">
+                    <div class="detail-header">
+                        <label>Steps to Follow:</label>
+                        <div class="copy-button-container">
+    <button onclick="copyText('stepsContent', this)" class="btn btn-sm btn-outline-primary">
+        <i class="fa-solid fa-copy"></i>
+        <span class="button-text">Copy</span>
+    </button>
+    <span class="copy-feedback">Copied!</span>
+</div>
+                    </div>
+                    <p id="stepsContent">{{ case_details.steps }}</p>
+                </div>
+
+                <div class="detail-box">
+                    <div class="detail-header">
+                        <label>Case Status:</label>
+                        <div class="copy-button-container">
+    <button onclick="copyText('stepsContent', this)" class="btn btn-sm btn-outline-primary">
+        <i class="fa-solid fa-copy"></i>
+        <span class="button-text">Copy</span>
+    </button>
+    <span class="copy-feedback">Copied!</span>
+</div>
+                    </div>
+                    <p id="statusContent">{{ case_details.status }}</p>
+                </div>
+
+                <div class="detail-box">
+                    <div class="detail-header">
+                        <label>Blurb:</label>
+                        <div class="copy-button-container">
+    <button onclick="copyText('stepsContent', this)" class="btn btn-sm btn-outline-primary">
+        <i class="fa-solid fa-copy"></i>
+        <span class="button-text">Copy</span>
+    </button>
+    <span class="copy-feedback">Copied!</span>
+</div>
+                    </div>
+                    <p id="blurbContent">{{ case_details.blurb }}</p>
+                </div>
+
+                <div class="detail-box">
+                    <div class="detail-header">
+                        <label>Annotations:</label>
+                        <div class="copy-button-container">
+    <button onclick="copyText('stepsContent', this)" class="btn btn-sm btn-outline-primary">
+        <i class="fa-solid fa-copy"></i>
+        <span class="button-text">Copy</span>
+    </button>
+    <span class="copy-feedback">Copied!</span>
+</div>
+                    </div>
+                    <p id="annotationsContent">{{ case_details.annotations }}</p>
+                </div>
+            {% else %}
+    <!-- Easyship and SIM show only blurb -->
+    <div class="detail-box">
+        <div class="detail-header">
+            <label>Blurb:</label>
+            <div class="copy-button-container">
+                <button onclick="copyText('blurbContent', this)" class="btn btn-sm btn-outline-primary">
+                    <i class="fa-solid fa-copy"></i>
+                    <span class="button-text">Copy</span>
+                </button>
+                <span class="copy-feedback">Copied!</span>
+            </div>
+        </div>
+        <p id="blurbContent">{{ case_details.blurb }}</p>
+    </div>
+{% endif %}
+
+        </div>
+    </div>
+{% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    function updateForm() {
+        document.getElementById('selectionForm').submit();
+    }
+
+    function copyText(elementId, clickedButton) {
+        // Get the content to copy
+        const element = document.getElementById(elementId);
+        const text = element.innerText || element.textContent;
+        
+        // Create a temporary input element
+        const input = document.createElement('textarea');
+        input.value = text;
+        document.body.appendChild(input);
+        
+        // Select and copy the text
+        input.select();
+        try {
+            document.execCommand('copy');
+            // Show feedback
+            const buttonText = clickedButton.querySelector('.button-text');
+            const originalText = buttonText.textContent;
+            const icon = clickedButton.querySelector('i');
+            
+            // Change button text and icon
+            buttonText.textContent = 'Copied!';
+            icon.className = 'fa-solid fa-check';
+            
+            // Revert back after 2 seconds
+            setTimeout(() => {
+                buttonText.textContent = originalText;
+                icon.className = 'fa-solid fa-copy';
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text:', err);
+        }
+        
+        // Remove the temporary input
+        document.body.removeChild(input);
+    }
+</script>
